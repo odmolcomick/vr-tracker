@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker & Viewer System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            text-align: center;
+            color: white;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 50px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .selection-screen {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+
+        .option-btn {
+            padding: 30px 60px;
+            font-size: 1.5em;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .option-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+
+        .tracker-screen, .viewer-screen {
+            display: none;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Tracker Styles */
+        .tracker-container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .tracker-container h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        #trackerVideo {
+            width: 100%;
+            max-width: 640px;
+            border-radius: 10px;
+            border: 3px solid #667eea;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            color: #333;
+        }
+
+        /* VR Viewer Styles */
+        .vr-container {
+            position: relative;
+            width: 100%;
+            height: 80vh;
+            perspective: 1000px;
+        }
+
+        .vr-display {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(102, 126, 234, 0.5);
+        }
+
+        .vr-video-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .vr-eye {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            border-radius: 15px;
+            border: 3px solid #667eea;
+            background: #1a1a1a;
+        }
+
+        .vr-eye video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .vr-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .vr-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(102, 126, 234, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(102, 126, 234, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .vr-hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #667eea;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(102, 126, 234, 0.8);
+        }
+
+        .vr-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(102, 126, 234, 0.6);
+            border-radius: 50%;
+        }
+
+        .vr-crosshair::before,
+        .vr-crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(102, 126, 234, 0.6);
+        }
+
+        .vr-crosshair::before {
+            width: 2px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .vr-crosshair::after {
+            width: 20px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .back-btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.5em;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ff4444;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Selection Screen -->
+        <div id="selectionScreen" class="selection-screen">
+            <button class="option-btn" onclick="selectRole('tracker')">📹 Tracker</button>
+            <button class="option-btn" onclick="selectRole('viewer')">🥽 Viewer</button>
+        </div>
+
+        <!-- Tracker Screen -->
+        <div id="trackerScreen" class="tracker-screen">
+            <div class="tracker-container">
+                <h2>📹 Tracker Mode</h2>
+                <video id="trackerVideo" autoplay playsinline></video>
+                <div class="status">
+                    <p><strong>Status:</strong> Camera Active</p>
+                    <p>Your camera feed is being broadcasted to viewers.</p>
+                </div>
+                <button class="back-btn" onclick="goBack()">← Back to Selection</button>
+            </div>
+        </div>
+
+        <!-- Viewer Screen -->
+        <div id="viewerScreen" class="viewer-screen">
+            <h2 style="margin-bottom: 20px;">🥽 VR Viewer Mode</h2>
+            <div class="vr-container">
+                <div class="vr-display">
+                    <div class="vr-video-wrapper">
+                        <div class="vr-eye">
+                            <video id="viewerVideoLeft" autoplay playsinline muted></video>
+                        </div>
+                        <div class="vr-eye">
+                            <video id="viewerVideoRight" autoplay playsinline muted></video>
+                        </div>
+                    </div>
+                    <div class="vr-overlay">
+                        <div class="vr-grid"></div>
+                        <div class="vr-hud">
+                            <span class="live-indicator"></span>LIVE FEED<br>
+                            <small>VR MODE ACTIVE</small>
+                        </div>
+                        <div class="vr-crosshair"></div>
+                    </div>
+                </div>
+            </div>
+            <button class="back-btn" onclick="goBack()">← Back to Selection</button>
+        </div>
+    </div>
+
+    <script>
+        let localStream = null;
+
+        async function selectRole(role) {
+            document.getElementById('selectionScreen').style.display = 'none';
+            
+            if (role === 'tracker') {
+                document.getElementById('trackerScreen').style.display = 'block';
+                await startTracker();
+            } else if (role === 'viewer') {
+                document.getElementById('viewerScreen').style.display = 'block';
+                await startViewer();
+            }
+        }
+
+        async function startTracker() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'environment'
+                    }, 
+                    audio: false 
+                });
+                
+                localStream = stream;
+                const videoElement = document.getElementById('trackerVideo');
+                videoElement.srcObject = stream;
+                
+                // In a real implementation, you would broadcast this stream
+                // using WebRTC or WebSocket to viewers
+                console.log('Tracker camera started');
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Could not access camera. Please allow camera permissions.');
+            }
+        }
+
+        async function startViewer() {
+            try {
+                // In a real implementation, you would receive the stream from the tracker
+                // For demo purposes, we'll use the local camera to simulate receiving a feed
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }, 
+                    audio: false 
+                });
+                
+                const leftVideo = document.getElementById('viewerVideoLeft');
+                const rightVideo = document.getElementById('viewerVideoRight');
+                
+                leftVideo.srcObject = stream;
+                rightVideo.srcObject = stream.clone();
+                
+                console.log('Viewer mode started - VR display active');
+            } catch (error) {
+                console.error('Error starting viewer:', error);
+                alert('Could not start viewer. Please allow camera permissions.');
+            }
+        }
+
+        function goBack() {
+            // Stop all video streams
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            // Stop viewer videos
+            const leftVideo = document.getElementById('viewerVideoLeft');
+            const rightVideo = document.getElementById('viewerVideoRight');
+            if (leftVideo.srcObject) {
+                leftVideo.srcObject.getTracks().forEach(track => track.stop());
+                leftVideo.srcObject = null;
+            }
+            if (rightVideo.srcObject) {
+                rightVideo.srcObject.getTracks().forEach(track => track.stop());
+                rightVideo.srcObject = null;
+            }
+            
+            // Hide all screens and show selection
+            document.getElementById('trackerScreen').style.display = 'none';
+            document.getElementById('viewerScreen').style.display = 'none';
+            document.getElementById('selectionScreen').style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
