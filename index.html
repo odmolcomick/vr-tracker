@@ -4,134 +4,205 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>P2P VR Tracker</title>
-    <!-- PeerJS for WebRTC signaling -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #00ff9d; --bg: #0a0a12; --panel: #161625; }
+        :root { --primary: #00ff9d; --bg: #050508; --panel: #11111a; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', monospace; }
         
-        body { background: var(--bg); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-x: hidden; }
+        body { background: var(--bg); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
         
-        .screen { display: none; width: 100%; max-width: 800px; padding: 20px; text-align: center; animation: fadeIn 0.5s; }
+        .screen { display: none; width: 100%; max-width: 600px; padding: 20px; text-align: center; animation: fadeIn 0.4s ease-out; }
         .active { display: block; }
         
-        h1 { color: var(--primary); margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; font-size: 1.8rem; }
+        h1 { color: var(--primary); margin-bottom: 25px; text-transform: uppercase; letter-spacing: 3px; font-size: 1.5rem; text-shadow: 0 0 10px rgba(0,255,157,0.3); }
         
-        /* Buttons & Inputs */
+        /* UI Elements */
         button {
             background: transparent; border: 2px solid var(--primary); color: var(--primary);
-            padding: 15px 30px; font-size: 1.2rem; margin: 10px; cursor: pointer;
-            transition: 0.3s; text-transform: uppercase; font-weight: bold;
+            padding: 16px 32px; font-size: 1.1rem; margin: 10px; cursor: pointer;
+            transition: all 0.2s; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;
         }
-        button:hover, button:active { background: var(--primary); color: var(--bg); }
+        button:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 15px var(--primary); }
+        button:active { transform: scale(0.96); }
         
         input {
-            background: var(--panel); border: 1px solid #333; color: white;
-            padding: 15px; font-size: 1.5rem; text-align: center; width: 200px;
-            letter-spacing: 5px; text-transform: uppercase; margin-bottom: 20px;
+            background: var(--panel); border: 2px solid #333; color: white;
+            padding: 15px; font-size: 1.8rem; text-align: center; width: 220px;
+            letter-spacing: 8px; text-transform: uppercase; margin-bottom: 20px; outline: none;
         }
+        input:focus { border-color: var(--primary); }
         
-        /* Tracker UI */
+        /* Tracker Specific */
         .code-display { 
-            font-size: 3rem; color: var(--primary); border: 2px dashed var(--primary); 
-            padding: 20px; margin: 20px auto; display: inline-block; background: rgba(0,255,157,0.05);
+            font-size: 3.5rem; color: var(--primary); border: 2px dashed var(--primary); 
+            padding: 25px; margin: 20px auto; display: inline-block; 
+            background: rgba(0,255,157,0.03); letter-spacing: 5px;
         }
-        .status { margin-top: 15px; font-size: 0.9rem; opacity: 0.7; min-height: 20px;}
+        .status { margin-top: 15px; font-size: 0.85rem; opacity: 0.6; min-height: 20px; }
         
-        /* VR Viewer UI */
-        .vr-container {
-            display: flex; gap: 10px; height: 60vh; width: 100%; 
-            background: #000; border: 2px solid #333; position: relative;
+        /* --- VR VIEWER STYLES --- */
+        .vr-wrapper {
+            position: relative; width: 100vw; height: 100vh; 
+            background: #000; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;
+            display: flex; overflow: hidden;
         }
-        .vr-eye {
-            flex: 1; position: relative; overflow: hidden; border-radius: 50% / 10%;
-            border: 1px solid #222;
-        }
-        .vr-eye video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         
-        /* VR Overlay Grid */
-        .vr-overlay {
-            position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none;
-            background: linear-gradient(rgba(0,255,157,0.03) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0,255,157,0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
+        /* Each eye container */
+        .eye-container {
+            flex: 1; position: relative; overflow: hidden;
+            /* Black separator between eyes */
+            border-right: 4px solid #000; 
         }
-        .vr-crosshair {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 30px; height: 30px; border: 2px solid rgba(0,255,157,0.5); border-radius: 50%;
-        }
-        .live-badge {
-            position: absolute; top: 15px; left: 15px; background: red; color: white;
-            padding: 2px 8px; font-size: 0.8rem; font-weight: bold; border-radius: 3px;
-            animation: pulse 2s infinite;
+        .eye-container:last-child { border-right: none; }
+
+        /* The actual video element with distortion applied */
+        .vr-video {
+            width: 100%; height: 100%; object-fit: cover;
+            /* Barrel Distortion for VR Lenses */
+            filter: contrast(1.1) saturate(1.2);
+            transform: scale(1.1); /* Slight zoom to hide distorted edges */
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        /* VR Overlay Grid & HUD */
+        .vr-hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+            background: 
+                radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 100%), /* Vignette */
+                linear-gradient(rgba(0,255,157,0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,157,0.05) 1px, transparent 1px);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+        }
+
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px; border: 2px solid rgba(0,255,157,0.4); border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0,255,157,0.2);
+        }
+        .crosshair::after {
+            content:''; position:absolute; top:50%; left:50%; width:4px; height:4px; 
+            background:var(--primary); transform:translate(-50%,-50%); border-radius:50%;
+        }
+
+        .live-indicator {
+            position: absolute; top: 20px; left: 20px; 
+            background: rgba(255,0,0,0.8); color: white; padding: 4px 10px; 
+            font-size: 0.75rem; font-weight: bold; letter-spacing: 1px;
+            border-radius: 2px; animation: pulse 2s infinite;
+        }
+
+        .fps-counter {
+            position: absolute; bottom: 20px; right: 20px; 
+            color: rgba(0,255,157,0.5); font-size: 0.7rem;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
         
-        .error { color: #ff4444; margin-top: 10px; font-size: 0.9rem; }
+        .error-msg { color: #ff4444; margin-top: 10px; font-size: 0.85rem; min-height: 20px; }
+        
+        /* Mobile landscape warning */
+        @media (orientation: portrait) {
+            .vr-wrapper::after {
+                content: "⚠️ ROTATE PHONE TO LANDSCAPE FOR VR";
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg);
+                background: rgba(0,0,0,0.9); padding: 20px; border: 1px solid var(--primary);
+                color: var(--primary); font-size: 1.2rem; z-index: 100; white-space: nowrap;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <!-- SELECTION SCREEN -->
+    <!-- SELECTION -->
     <div id="screen-select" class="screen active">
         <h1>System Select</h1>
         <button onclick="initTracker()">📹 Tracker</button>
-        <button onclick="showViewerInput()">🥽 Viewer</button>
+        <button onclick="showViewerInput()"> Viewer</button>
     </div>
 
-    <!-- TRACKER SCREEN -->
+    <!-- TRACKER -->
     <div id="screen-tracker" class="screen">
         <h1>Tracker Active</h1>
-        <p>Share this code with the viewer:</p>
+        <p style="opacity:0.7; font-size:0.9rem;">Share this code with viewer:</p>
         <div id="tracker-code" class="code-display">...</div>
         <div id="tracker-status" class="status">Initializing secure link...</div>
-        <video id="local-video" autoplay muted playsinline style="display:none;"></video>
         <br><br>
-        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Exit</button>
+        <button onclick="resetApp()" style="font-size:0.8rem; padding:10px 20px; border-color:#555; color:#888;">Exit</button>
     </div>
 
-    <!-- VIEWER INPUT SCREEN -->
+    <!-- VIEWER INPUT -->
     <div id="screen-viewer-input" class="screen">
         <h1>Enter Feed Code</h1>
-        <input type="text" id="room-code" placeholder="XXXXXX" maxlength="6">
+        <input type="text" id="room-code" placeholder="XXXXXX" maxlength="6" autocomplete="off">
         <br>
         <button onclick="joinFeed()">Join Feed</button>
-        <div id="viewer-error" class="error"></div>
+        <div id="viewer-error" class="error-msg"></div>
         <br><br>
-        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Back</button>
+        <button onclick="resetApp()" style="font-size:0.8rem; padding:10px 20px; border-color:#555; color:#888;">Back</button>
     </div>
 
-    <!-- VIEWER VR SCREEN -->
-    <div id="screen-viewer-vr" class="screen">
-        <h1>VR Live Feed</h1>
-        <div class="vr-container">
-            <div class="vr-eye"><video id="vr-left" autoplay playsinline></video></div>
-            <div class="vr-eye"><video id="vr-right" autoplay playsinline></video></div>
-            <div class="vr-overlay">
-                <div class="live-badge">LIVE</div>
-                <div class="vr-crosshair"></div>
+    <!-- VR VIEWER FULLSCREEN -->
+    <div id="screen-viewer-vr" class="screen" style="max-width:100%; padding:0;">
+        <div class="vr-wrapper">
+            <div class="eye-container">
+                <video id="vr-left" class="vr-video" autoplay playsinline muted></video>
+                <div class="vr-hud">
+                    <div class="live-indicator">LIVE FEED</div>
+                    <div class="crosshair"></div>
+                    <div class="fps-counter" id="fps-left">-- FPS</div>
+                </div>
+            </div>
+            <div class="eye-container">
+                <video id="vr-right" class="vr-video" autoplay playsinline muted></video>
+                <div class="vr-hud">
+                    <div class="live-indicator">LIVE FEED</div>
+                    <div class="crosshair"></div>
+                    <div class="fps-counter" id="fps-right">-- FPS</div>
+                </div>
             </div>
         </div>
-        <div id="viewer-status" class="status">Connecting to tracker stream...</div>
-        <br>
-        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Disconnect</button>
+        <!-- Hidden disconnect button area at bottom center -->
+        <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); z-index:20;">
+            <button onclick="resetApp()" style="background:rgba(0,0,0,0.7); border:1px solid #555; color:#aaa; padding:8px 20px; font-size:0.7rem;">DISCONNECT</button>
+        </div>
     </div>
 
 <script>
-    // --- CONFIGURATION ---
-    // Using public PeerJS cloud server for signaling (free tier)
-    const PEER_CONFIG = { debug: 2 }; 
-    
+    const PEER_CONFIG = { debug: 0 };
     let peer = null;
     let localStream = null;
     let currentCall = null;
+    let fpsInterval = null;
 
     // --- NAVIGATION ---
     function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
+        
+        // Force fullscreen for VR mode
+        if (id === 'screen-viewer-vr') {
+            enterFullscreen();
+            startFPSCounter();
+        } else {
+            exitFullscreen();
+            stopFPSCounter();
+        }
+    }
+
+    async function enterFullscreen() {
+        const elem = document.documentElement;
+        try {
+            if (elem.requestFullscreen) await elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+            else if (elem.msRequestFullscreen) await elem.msRequestFullscreen();
+        } catch(e) { console.log("Fullscreen denied"); }
+    }
+
+    function exitFullscreen() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(()=>{});
+        }
     }
 
     function resetApp() {
@@ -139,60 +210,49 @@
         if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
         if (currentCall) { currentCall.close(); currentCall = null; }
         
-        // Clear videos
         ['local-video', 'vr-left', 'vr-right'].forEach(id => {
             const v = document.getElementById(id);
-            v.srcObject = null;
+            if(v) v.srcObject = null;
         });
         
         document.getElementById('room-code').value = '';
         document.getElementById('viewer-error').textContent = '';
+        exitFullscreen();
         showScreen('screen-select');
     }
 
-    // --- TRACKER LOGIC ---
+    // --- TRACKER ---
     async function initTracker() {
         showScreen('screen-tracker');
         const statusEl = document.getElementById('tracker-status');
         const codeEl = document.getElementById('tracker-code');
         
         try {
-            // 1. Get Camera
             localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} }, 
+                video: { facingMode: 'environment', width: {ideal: 1920}, height: {ideal: 1080} }, 
                 audio: false 
             });
             
-            // Show preview locally (optional, hidden by default but good for debugging)
-            // document.getElementById('local-video').srcObject = localStream; 
-
-            // 2. Generate Short ID
             const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
             codeEl.textContent = shortId;
             
-            // 3. Initialize Peer
             peer = new Peer(shortId, PEER_CONFIG);
             
-            peer.on('open', (id) => {
-                statusEl.textContent = `✅ Online. Waiting for viewer to join ${id}...`;
+            peer.on('open', () => {
+                statusEl.textContent = `✅ Online. Waiting for viewer...`;
             });
             
             peer.on('call', (call) => {
-                statusEl.textContent = "📡 Viewer connected! Sending stream...";
-                call.answer(localStream); // Answer with our camera stream
+                statusEl.textContent = "📡 Viewer connected! Broadcasting...";
+                call.answer(localStream);
                 currentCall = call;
-                
-                call.on('close', () => {
-                    statusEl.textContent = "❌ Viewer disconnected.";
-                    currentCall = null;
-                });
+                call.on('close', () => { statusEl.textContent = "❌ Viewer disconnected."; currentCall = null; });
             });
             
             peer.on('error', (err) => {
-                console.error(err);
                 if(err.type === 'unavailable-id') {
-                    statusEl.textContent = "⚠️ Code taken. Refreshing...";
-                    setTimeout(initTracker, 1000); // Retry with new code
+                    statusEl.textContent = "⚠️ Code taken. Retrying...";
+                    setTimeout(initTracker, 800);
                 } else {
                     statusEl.textContent = "Error: " + err.type;
                 }
@@ -204,60 +264,80 @@
         }
     }
 
-    // --- VIEWER LOGIC ---
-    function showViewerInput() {
-        showScreen('screen-viewer-input');
-    }
+    // --- VIEWER ---
+    function showViewerInput() { showScreen('screen-viewer-input'); }
 
     async function joinFeed() {
         const code = document.getElementById('room-code').value.trim().toUpperCase();
         const errorEl = document.getElementById('viewer-error');
-        const statusEl = document.getElementById('viewer-status');
+        const statusEl = document.createElement('div'); // Temporary status
         
-        if (code.length < 4) {
-            errorEl.textContent = "Please enter a valid code";
-            return;
-        }
+        if (code.length < 4) { errorEl.textContent = "Invalid code"; return; }
         
         errorEl.textContent = "";
         showScreen('screen-viewer-vr');
-        statusEl.textContent = `🔗 Connecting to ${code}...`;
         
         try {
-            peer = new Peer(null, PEER_CONFIG); // Let server assign us a random ID
+            peer = new Peer(null, PEER_CONFIG);
             
             peer.on('open', () => {
-                // Call the tracker
-                const call = peer.call(code, localStream); // localStream is null here, which is fine for receive-only
+                const call = peer.call(code, null);
                 currentCall = call;
                 
                 call.on('stream', (remoteStream) => {
-                    statusEl.textContent = "✅ Connected to Tracker";
-                    // Mirror stream to both eyes for VR
+                    // Mirror to both eyes for stereoscopic VR
                     document.getElementById('vr-left').srcObject = remoteStream;
                     document.getElementById('vr-right').srcObject = remoteStream;
                 });
                 
                 call.on('error', (err) => {
-                    statusEl.textContent = "❌ Connection failed: " + err.type;
+                    alert("Connection failed: " + err.type);
+                    resetApp();
                 });
                 
                 call.on('close', () => {
-                    statusEl.textContent = "❌ Tracker disconnected";
+                    alert("Tracker disconnected");
+                    resetApp();
                 });
             });
             
             peer.on('error', (err) => {
                 if (err.type === 'peer-unavailable') {
-                    statusEl.textContent = "❌ Tracker not found. Check code.";
-                } else {
-                    statusEl.textContent = "❌ Network Error: " + err.type;
+                    alert("Tracker not found. Check code.");
+                    resetApp();
                 }
             });
             
         } catch (err) {
-            statusEl.textContent = "❌ Init Error: " + err.message;
+            alert("Init Error: " + err.message);
+            resetApp();
         }
+    }
+
+    // --- FPS COUNTER ---
+    function startFPSCounter() {
+        let lastTime = performance.now();
+        let frames = 0;
+        fpsInterval = setInterval(() => {
+            const now = performance.now();
+            const fps = Math.round((frames * 1000) / (now - lastTime));
+            document.getElementById('fps-left').textContent = fps + " FPS";
+            document.getElementById('fps-right').textContent = fps + " FPS";
+            frames = 0;
+            lastTime = now;
+        }, 1000);
+        
+        // Count frames via requestAnimationFrame
+        function countFrame() {
+            frames++;
+            if(fpsInterval) requestAnimationFrame(countFrame);
+        }
+        requestAnimationFrame(countFrame);
+    }
+
+    function stopFPSCounter() {
+        if(fpsInterval) clearInterval(fpsInterval);
+        fpsInterval = null;
     }
 </script>
 </body>
