@@ -3,132 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>P2P VR Tracker</title>
+    <title>360° VR Tracker</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Three.js for 360 VR rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        :root { --primary: #00ff9d; --bg: #050508; --panel: #11111a; }
+        :root { --primary: #00ff9d; --bg: #050508; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', monospace; }
+        body { background: var(--bg); color: white; min-height: 100vh; overflow: hidden; }
         
-        body { background: var(--bg); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        .screen { display: none; width: 100%; height: 100vh; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: fadeIn 0.4s; position: absolute; top:0; left:0; z-index: 10; background: var(--bg); }
+        .active { display: flex; }
         
-        .screen { display: none; width: 100%; max-width: 600px; padding: 20px; text-align: center; animation: fadeIn 0.4s ease-out; }
-        .active { display: block; }
+        h1 { color: var(--primary); margin-bottom: 25px; text-transform: uppercase; letter-spacing: 3px; font-size: 1.5rem; }
         
-        h1 { color: var(--primary); margin-bottom: 25px; text-transform: uppercase; letter-spacing: 3px; font-size: 1.5rem; text-shadow: 0 0 10px rgba(0,255,157,0.3); }
-        
-        /* UI Elements */
         button {
             background: transparent; border: 2px solid var(--primary); color: var(--primary);
-            padding: 16px 32px; font-size: 1.1rem; margin: 10px; cursor: pointer;
-            transition: all 0.2s; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;
+            padding: 16px 32px; font-size: 1.1rem; margin: 10px; cursor: pointer; transition: 0.2s;
+            text-transform: uppercase; font-weight: bold;
         }
-        button:hover { background: var(--primary); color: var(--bg); box-shadow: 0 0 15px var(--primary); }
-        button:active { transform: scale(0.96); }
+        button:hover { background: var(--primary); color: var(--bg); }
         
         input {
-            background: var(--panel); border: 2px solid #333; color: white;
+            background: #111; border: 2px solid #333; color: white;
             padding: 15px; font-size: 1.8rem; text-align: center; width: 220px;
             letter-spacing: 8px; text-transform: uppercase; margin-bottom: 20px; outline: none;
         }
         input:focus { border-color: var(--primary); }
         
-        /* Tracker Specific */
         .code-display { 
             font-size: 3.5rem; color: var(--primary); border: 2px dashed var(--primary); 
-            padding: 25px; margin: 20px auto; display: inline-block; 
-            background: rgba(0,255,157,0.03); letter-spacing: 5px;
+            padding: 25px; margin: 20px auto; display: inline-block; letter-spacing: 5px;
         }
-        .status { margin-top: 15px; font-size: 0.85rem; opacity: 0.6; min-height: 20px; }
-        
-        /* --- VR VIEWER STYLES --- */
-        .vr-wrapper {
-            position: relative; width: 100vw; height: 100vh; 
-            background: #000; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;
-            display: flex; overflow: hidden;
-        }
-        
-        /* Each eye container */
-        .eye-container {
-            flex: 1; position: relative; overflow: hidden;
-            /* Black separator between eyes */
-            border-right: 4px solid #000; 
-        }
-        .eye-container:last-child { border-right: none; }
-
-        /* The actual video element with distortion applied */
-        .vr-video {
-            width: 100%; height: 100%; object-fit: cover;
-            /* Barrel Distortion for VR Lenses */
-            filter: contrast(1.1) saturate(1.2);
-            transform: scale(1.1); /* Slight zoom to hide distorted edges */
-        }
-
-        /* VR Overlay Grid & HUD */
-        .vr-hud {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 10;
-            background: 
-                radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 100%), /* Vignette */
-                linear-gradient(rgba(0,255,157,0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,255,157,0.05) 1px, transparent 1px);
-            background-size: 100% 100%, 50px 50px, 50px 50px;
-        }
-
-        .crosshair {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 40px; height: 40px; border: 2px solid rgba(0,255,157,0.4); border-radius: 50%;
-            box-shadow: 0 0 10px rgba(0,255,157,0.2);
-        }
-        .crosshair::after {
-            content:''; position:absolute; top:50%; left:50%; width:4px; height:4px; 
-            background:var(--primary); transform:translate(-50%,-50%); border-radius:50%;
-        }
-
-        .live-indicator {
-            position: absolute; top: 20px; left: 20px; 
-            background: rgba(255,0,0,0.8); color: white; padding: 4px 10px; 
-            font-size: 0.75rem; font-weight: bold; letter-spacing: 1px;
-            border-radius: 2px; animation: pulse 2s infinite;
-        }
-
-        .fps-counter {
-            position: absolute; bottom: 20px; right: 20px; 
-            color: rgba(0,255,157,0.5); font-size: 0.7rem;
-        }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
-        
+        .status { margin-top: 15px; font-size: 0.85rem; opacity: 0.6; }
         .error-msg { color: #ff4444; margin-top: 10px; font-size: 0.85rem; min-height: 20px; }
         
-        /* Mobile landscape warning */
-        @media (orientation: portrait) {
-            .vr-wrapper::after {
-                content: "⚠️ ROTATE PHONE TO LANDSCAPE FOR VR";
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg);
-                background: rgba(0,0,0,0.9); padding: 20px; border: 1px solid var(--primary);
-                color: var(--primary); font-size: 1.2rem; z-index: 100; white-space: nowrap;
-            }
+        /* 360 VR Canvas Container */
+        #vr-canvas-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1; display: none;
         }
+        #vr-canvas-container.active { display: block; }
+        
+        /* VR HUD Overlay on top of canvas */
+        .vr-hud-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5; display: none;
+        }
+        .vr-hud-overlay.active { display: block; }
+        
+        .live-badge {
+            position: absolute; top: 20px; left: 20px; background: rgba(255,0,0,0.8);
+            color: white; padding: 4px 10px; font-size: 0.75rem; font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        .gyro-hint {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 20px;
+            font-size: 0.75rem; color: rgba(255,255,255,0.6); white-space: nowrap;
+        }
+        .disconnect-btn {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            pointer-events: all !important; background: rgba(0,0,0,0.7);
+            border: 1px solid #555; color: #aaa; padding: 8px 20px;
+            font-size: 0.7rem; cursor: pointer;
+        }
+        
+        @keyframes fadeIn { from{opacity:0;transform:translateY(15px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
     </style>
 </head>
 <body>
 
     <!-- SELECTION -->
     <div id="screen-select" class="screen active">
-        <h1>System Select</h1>
-        <button onclick="initTracker()">📹 Tracker</button>
-        <button onclick="showViewerInput()"> Viewer</button>
+        <h1>360° VR System</h1>
+        <button onclick="initTracker()"> Tracker</button>
+        <button onclick="showViewerInput()">🥽 Viewer</button>
     </div>
 
     <!-- TRACKER -->
     <div id="screen-tracker" class="screen">
         <h1>Tracker Active</h1>
-        <p style="opacity:0.7; font-size:0.9rem;">Share this code with viewer:</p>
+        <p style="opacity:0.7;font-size:0.9rem;">Share this code:</p>
         <div id="tracker-code" class="code-display">...</div>
-        <div id="tracker-status" class="status">Initializing secure link...</div>
-        <br><br>
-        <button onclick="resetApp()" style="font-size:0.8rem; padding:10px 20px; border-color:#555; color:#888;">Exit</button>
+        <div id="tracker-status" class="status">Initializing...</div>
+        <br><button onclick="resetApp()" style="font-size:0.8rem;border-color:#555;color:#888;">Exit</button>
     </div>
 
     <!-- VIEWER INPUT -->
@@ -136,73 +96,36 @@
         <h1>Enter Feed Code</h1>
         <input type="text" id="room-code" placeholder="XXXXXX" maxlength="6" autocomplete="off">
         <br>
-        <button onclick="joinFeed()">Join Feed</button>
+        <button onclick="joinFeed()">Join 360° Feed</button>
         <div id="viewer-error" class="error-msg"></div>
         <br><br>
-        <button onclick="resetApp()" style="font-size:0.8rem; padding:10px 20px; border-color:#555; color:#888;">Back</button>
+        <button onclick="resetApp()" style="font-size:0.8rem;border-color:#555;color:#888;">Back</button>
     </div>
 
-    <!-- VR VIEWER FULLSCREEN -->
-    <div id="screen-viewer-vr" class="screen" style="max-width:100%; padding:0;">
-        <div class="vr-wrapper">
-            <div class="eye-container">
-                <video id="vr-left" class="vr-video" autoplay playsinline muted></video>
-                <div class="vr-hud">
-                    <div class="live-indicator">LIVE FEED</div>
-                    <div class="crosshair"></div>
-                    <div class="fps-counter" id="fps-left">-- FPS</div>
-                </div>
-            </div>
-            <div class="eye-container">
-                <video id="vr-right" class="vr-video" autoplay playsinline muted></video>
-                <div class="vr-hud">
-                    <div class="live-indicator">LIVE FEED</div>
-                    <div class="crosshair"></div>
-                    <div class="fps-counter" id="fps-right">-- FPS</div>
-                </div>
-            </div>
-        </div>
-        <!-- Hidden disconnect button area at bottom center -->
-        <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); z-index:20;">
-            <button onclick="resetApp()" style="background:rgba(0,0,0,0.7); border:1px solid #555; color:#aaa; padding:8px 20px; font-size:0.7rem;">DISCONNECT</button>
-        </div>
+    <!-- 360 VR CANVAS -->
+    <div id="vr-canvas-container"></div>
+    
+    <!-- VR HUD OVERLAY -->
+    <div id="vr-hud-overlay" class="vr-hud-overlay">
+        <div class="live-badge">● LIVE 360°</div>
+        <div class="gyro-hint">Drag to look around • Tilt phone for gyro</div>
+        <button class="disconnect-btn" onclick="resetApp()">DISCONNECT</button>
     </div>
 
 <script>
     const PEER_CONFIG = { debug: 0 };
-    let peer = null;
-    let localStream = null;
-    let currentCall = null;
-    let fpsInterval = null;
+    let peer = null, localStream = null, currentCall = null;
+    
+    // Three.js variables
+    let scene, camera, renderer, sphereMesh, videoTexture;
+    let isDragging = false, previousMousePosition = { x: 0, y: 0 };
+    let spherical = new THREE.Spherical();
+    let gyroEnabled = false;
 
     // --- NAVIGATION ---
     function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-        
-        // Force fullscreen for VR mode
-        if (id === 'screen-viewer-vr') {
-            enterFullscreen();
-            startFPSCounter();
-        } else {
-            exitFullscreen();
-            stopFPSCounter();
-        }
-    }
-
-    async function enterFullscreen() {
-        const elem = document.documentElement;
-        try {
-            if (elem.requestFullscreen) await elem.requestFullscreen();
-            else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
-            else if (elem.msRequestFullscreen) await elem.msRequestFullscreen();
-        } catch(e) { console.log("Fullscreen denied"); }
-    }
-
-    function exitFullscreen() {
-        if (document.fullscreenElement) {
-            document.exitFullscreen().catch(()=>{});
-        }
+        document.getElementById(id)?.classList.add('active');
     }
 
     function resetApp() {
@@ -210,14 +133,22 @@
         if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
         if (currentCall) { currentCall.close(); currentCall = null; }
         
-        ['local-video', 'vr-left', 'vr-right'].forEach(id => {
-            const v = document.getElementById(id);
-            if(v) v.srcObject = null;
-        });
+        // Stop Three.js
+        if (renderer) {
+            renderer.dispose();
+            document.getElementById('vr-canvas-container').innerHTML = '';
+            renderer = null;
+        }
+        if (videoTexture) { videoTexture.dispose(); videoTexture = null; }
         
+        document.getElementById('vr-canvas-container').classList.remove('active');
+        document.getElementById('vr-hud-overlay').classList.remove('active');
         document.getElementById('room-code').value = '';
         document.getElementById('viewer-error').textContent = '';
-        exitFullscreen();
+        
+        // Remove gyro listeners
+        window.removeEventListener('deviceorientation', handleGyro);
+        
         showScreen('screen-select');
     }
 
@@ -237,27 +168,21 @@
             codeEl.textContent = shortId;
             
             peer = new Peer(shortId, PEER_CONFIG);
-            
-            peer.on('open', () => {
-                statusEl.textContent = `✅ Online. Waiting for viewer...`;
-            });
+            peer.on('open', () => { statusEl.textContent = `✅ Online. Waiting for viewer...`; });
             
             peer.on('call', (call) => {
-                statusEl.textContent = "📡 Viewer connected! Broadcasting...";
+                statusEl.textContent = "📡 Viewer connected! Broadcasting 360° feed...";
                 call.answer(localStream);
                 currentCall = call;
-                call.on('close', () => { statusEl.textContent = "❌ Viewer disconnected."; currentCall = null; });
+                call.on('close', () => { statusEl.textContent = " Viewer disconnected."; currentCall = null; });
             });
             
             peer.on('error', (err) => {
                 if(err.type === 'unavailable-id') {
                     statusEl.textContent = "⚠️ Code taken. Retrying...";
                     setTimeout(initTracker, 800);
-                } else {
-                    statusEl.textContent = "Error: " + err.type;
-                }
+                } else { statusEl.textContent = "Error: " + err.type; }
             });
-            
         } catch (err) {
             statusEl.textContent = "❌ Camera Error: " + err.message;
             statusEl.style.color = "#ff4444";
@@ -270,74 +195,176 @@
     async function joinFeed() {
         const code = document.getElementById('room-code').value.trim().toUpperCase();
         const errorEl = document.getElementById('viewer-error');
-        const statusEl = document.createElement('div'); // Temporary status
-        
         if (code.length < 4) { errorEl.textContent = "Invalid code"; return; }
         
         errorEl.textContent = "";
-        showScreen('screen-viewer-vr');
         
         try {
             peer = new Peer(null, PEER_CONFIG);
-            
             peer.on('open', () => {
                 const call = peer.call(code, null);
                 currentCall = call;
                 
                 call.on('stream', (remoteStream) => {
-                    // Mirror to both eyes for stereoscopic VR
-                    document.getElementById('vr-left').srcObject = remoteStream;
-                    document.getElementById('vr-right').srcObject = remoteStream;
+                    // Initialize 360 VR with the remote stream
+                    init360VR(remoteStream);
                 });
                 
-                call.on('error', (err) => {
-                    alert("Connection failed: " + err.type);
-                    resetApp();
-                });
-                
-                call.on('close', () => {
-                    alert("Tracker disconnected");
-                    resetApp();
-                });
+                call.on('error', (err) => { alert("Connection failed: " + err.type); resetApp(); });
+                call.on('close', () => { alert("Tracker disconnected"); resetApp(); });
             });
             
             peer.on('error', (err) => {
-                if (err.type === 'peer-unavailable') {
-                    alert("Tracker not found. Check code.");
-                    resetApp();
-                }
+                if (err.type === 'peer-unavailable') { alert("Tracker not found."); resetApp(); }
             });
-            
         } catch (err) {
             alert("Init Error: " + err.message);
             resetApp();
         }
     }
 
-    // --- FPS COUNTER ---
-    function startFPSCounter() {
-        let lastTime = performance.now();
-        let frames = 0;
-        fpsInterval = setInterval(() => {
-            const now = performance.now();
-            const fps = Math.round((frames * 1000) / (now - lastTime));
-            document.getElementById('fps-left').textContent = fps + " FPS";
-            document.getElementById('fps-right').textContent = fps + " FPS";
-            frames = 0;
-            lastTime = now;
-        }, 1000);
+    // --- 360° VR RENDERER ---
+    function init360VR(stream) {
+        const container = document.getElementById('vr-canvas-container');
+        container.classList.add('active');
+        document.getElementById('vr-hud-overlay').classList.add('active');
         
-        // Count frames via requestAnimationFrame
-        function countFrame() {
-            frames++;
-            if(fpsInterval) requestAnimationFrame(countFrame);
+        // Create video element from stream
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.loop = true;
+        video.setAttribute('webkit-playsinline', '');
+        
+        // Three.js Scene
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 0.1); // Slightly offset from center to avoid clipping
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Create inverted sphere for 360 viewing
+        const geometry = new THREE.SphereGeometry(500, 60, 40);
+        geometry.scale(-1, 1, 1); // Invert so we view from inside
+        
+        videoTexture = new THREE.VideoTexture(video);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+        videoTexture.format = THREE.RGBFormat;
+        
+        const material = new THREE.MeshBasicMaterial({ map: videoTexture });
+        sphereMesh = new THREE.Mesh(geometry, material);
+        scene.add(sphereMesh);
+        
+        // Initial camera orientation
+        spherical.set(500, Math.PI / 2, 0);
+        updateCameraFromSpherical();
+        
+        // Touch/Drag controls for looking around
+        const canvas = renderer.domElement;
+        
+        canvas.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const deltaX = e.touches[0].clientX - previousMousePosition.x;
+            const deltaY = e.touches[0].clientY - previousMousePosition.y;
+            
+            spherical.theta -= deltaX * 0.005;
+            spherical.phi -= deltaY * 0.005;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+            
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            updateCameraFromSpherical();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', () => { isDragging = false; });
+        
+        // Mouse controls for desktop testing
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            spherical.theta -= deltaX * 0.005;
+            spherical.phi -= deltaY * 0.005;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+            updateCameraFromSpherical();
+        });
+        canvas.addEventListener('mouseup', () => { isDragging = false; });
+        
+        // Gyroscope support (requires HTTPS)
+        if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ requires permission
+            DeviceOrientationEvent.requestPermission().then(response => {
+                if (response === 'granted') enableGyro();
+            }).catch(() => {});
+        } else if (window.DeviceOrientationEvent) {
+            enableGyro();
         }
-        requestAnimationFrame(countFrame);
+        
+        // Handle resize
+        window.addEventListener('resize', onWindowResize);
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            if (video.readyState >= 2) {
+                videoTexture.needsUpdate = true;
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
     }
 
-    function stopFPSCounter() {
-        if(fpsInterval) clearInterval(fpsInterval);
-        fpsInterval = null;
+    function updateCameraFromSpherical() {
+        const phi = spherical.phi;
+        const theta = spherical.theta;
+        camera.lookAt(
+            new THREE.Vector3(
+                500 * Math.sin(phi) * Math.cos(theta),
+                500 * Math.cos(phi),
+                500 * Math.sin(phi) * Math.sin(theta)
+            )
+        );
+    }
+
+    function enableGyro() {
+        gyroEnabled = true;
+        window.addEventListener('deviceorientation', handleGyro);
+    }
+
+    function handleGyro(event) {
+        if (!gyroEnabled || isDragging) return;
+        const beta = event.beta;   // Front-back tilt (-180 to 180)
+        const gamma = event.gamma; // Left-right tilt (-90 to 90)
+        
+        if (beta !== null && gamma !== null) {
+            spherical.phi = THREE.MathUtils.degToRad(90 - beta);
+            spherical.theta = THREE.MathUtils.degToRad(gamma);
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+            updateCameraFromSpherical();
+        }
+    }
+
+    function onWindowResize() {
+        if (!camera || !renderer) return;
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
     }
 </script>
 </body>
