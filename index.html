@@ -2,378 +2,263 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracker & Viewer System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P VR Tracker</title>
+    <!-- PeerJS for WebRTC signaling -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root { --primary: #00ff9d; --bg: #0a0a12; --panel: #161625; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', monospace; }
+        
+        body { background: var(--bg); color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-x: hidden; }
+        
+        .screen { display: none; width: 100%; max-width: 800px; padding: 20px; text-align: center; animation: fadeIn 0.5s; }
+        .active { display: block; }
+        
+        h1 { color: var(--primary); margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; font-size: 1.8rem; }
+        
+        /* Buttons & Inputs */
+        button {
+            background: transparent; border: 2px solid var(--primary); color: var(--primary);
+            padding: 15px 30px; font-size: 1.2rem; margin: 10px; cursor: pointer;
+            transition: 0.3s; text-transform: uppercase; font-weight: bold;
         }
-
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        button:hover, button:active { background: var(--primary); color: var(--bg); }
+        
+        input {
+            background: var(--panel); border: 1px solid #333; color: white;
+            padding: 15px; font-size: 1.5rem; text-align: center; width: 200px;
+            letter-spacing: 5px; text-transform: uppercase; margin-bottom: 20px;
         }
-
-        .container {
-            text-align: center;
-            color: white;
+        
+        /* Tracker UI */
+        .code-display { 
+            font-size: 3rem; color: var(--primary); border: 2px dashed var(--primary); 
+            padding: 20px; margin: 20px auto; display: inline-block; background: rgba(0,255,157,0.05);
         }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 50px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .selection-screen {
-            display: flex;
-            gap: 30px;
-            justify-content: center;
-        }
-
-        .option-btn {
-            padding: 30px 60px;
-            font-size: 1.5em;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: white;
-            color: #667eea;
-            font-weight: bold;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-        }
-
-        .option-btn:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
-        }
-
-        .tracker-screen, .viewer-screen {
-            display: none;
-            width: 100%;
-            max-width: 1200px;
-        }
-
-        /* Tracker Styles */
-        .tracker-container {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-
-        .tracker-container h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-
-        #trackerVideo {
-            width: 100%;
-            max-width: 640px;
-            border-radius: 10px;
-            border: 3px solid #667eea;
-        }
-
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f0f0f0;
-            border-radius: 10px;
-            color: #333;
-        }
-
-        /* VR Viewer Styles */
+        .status { margin-top: 15px; font-size: 0.9rem; opacity: 0.7; min-height: 20px;}
+        
+        /* VR Viewer UI */
         .vr-container {
-            position: relative;
-            width: 100%;
-            height: 80vh;
-            perspective: 1000px;
+            display: flex; gap: 10px; height: 60vh; width: 100%; 
+            background: #000; border: 2px solid #333; position: relative;
         }
-
-        .vr-display {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 0 50px rgba(102, 126, 234, 0.5);
-        }
-
-        .vr-video-wrapper {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            gap: 20px;
-            padding: 20px;
-        }
-
         .vr-eye {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            border-radius: 15px;
-            border: 3px solid #667eea;
-            background: #1a1a1a;
+            flex: 1; position: relative; overflow: hidden; border-radius: 50% / 10%;
+            border: 1px solid #222;
         }
-
-        .vr-eye video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
+        .vr-eye video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        
+        /* VR Overlay Grid */
         .vr-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none;
+            background: linear-gradient(rgba(0,255,157,0.03) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,255,157,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
-
-        .vr-grid {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(rgba(102, 126, 234, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(102, 126, 234, 0.1) 1px, transparent 1px);
-            background-size: 50px 50px;
-        }
-
-        .vr-hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #667eea;
-            font-size: 14px;
-            text-shadow: 0 0 10px rgba(102, 126, 234, 0.8);
-        }
-
         .vr-crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
-            border: 2px solid rgba(102, 126, 234, 0.6);
-            border-radius: 50%;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 30px; height: 30px; border: 2px solid rgba(0,255,157,0.5); border-radius: 50%;
+        }
+        .live-badge {
+            position: absolute; top: 15px; left: 15px; background: red; color: white;
+            padding: 2px 8px; font-size: 0.8rem; font-weight: bold; border-radius: 3px;
+            animation: pulse 2s infinite;
         }
 
-        .vr-crosshair::before,
-        .vr-crosshair::after {
-            content: '';
-            position: absolute;
-            background: rgba(102, 126, 234, 0.6);
-        }
-
-        .vr-crosshair::before {
-            width: 2px;
-            height: 20px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .vr-crosshair::after {
-            width: 20px;
-            height: 2px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .back-btn {
-            margin-top: 20px;
-            padding: 15px 30px;
-            font-size: 1.2em;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            background: white;
-            color: #667eea;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-
-        .back-btn:hover {
-            transform: scale(1.05);
-        }
-
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: white;
-            font-size: 1.5em;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .live-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            background: #ff4444;
-            border-radius: 50%;
-            margin-right: 10px;
-            animation: pulse 1s infinite;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        .error { color: #ff4444; margin-top: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Selection Screen -->
-        <div id="selectionScreen" class="selection-screen">
-            <button class="option-btn" onclick="selectRole('tracker')">📹 Tracker</button>
-            <button class="option-btn" onclick="selectRole('viewer')">🥽 Viewer</button>
-        </div>
 
-        <!-- Tracker Screen -->
-        <div id="trackerScreen" class="tracker-screen">
-            <div class="tracker-container">
-                <h2>📹 Tracker Mode</h2>
-                <video id="trackerVideo" autoplay playsinline></video>
-                <div class="status">
-                    <p><strong>Status:</strong> Camera Active</p>
-                    <p>Your camera feed is being broadcasted to viewers.</p>
-                </div>
-                <button class="back-btn" onclick="goBack()">← Back to Selection</button>
-            </div>
-        </div>
-
-        <!-- Viewer Screen -->
-        <div id="viewerScreen" class="viewer-screen">
-            <h2 style="margin-bottom: 20px;">🥽 VR Viewer Mode</h2>
-            <div class="vr-container">
-                <div class="vr-display">
-                    <div class="vr-video-wrapper">
-                        <div class="vr-eye">
-                            <video id="viewerVideoLeft" autoplay playsinline muted></video>
-                        </div>
-                        <div class="vr-eye">
-                            <video id="viewerVideoRight" autoplay playsinline muted></video>
-                        </div>
-                    </div>
-                    <div class="vr-overlay">
-                        <div class="vr-grid"></div>
-                        <div class="vr-hud">
-                            <span class="live-indicator"></span>LIVE FEED<br>
-                            <small>VR MODE ACTIVE</small>
-                        </div>
-                        <div class="vr-crosshair"></div>
-                    </div>
-                </div>
-            </div>
-            <button class="back-btn" onclick="goBack()">← Back to Selection</button>
-        </div>
+    <!-- SELECTION SCREEN -->
+    <div id="screen-select" class="screen active">
+        <h1>System Select</h1>
+        <button onclick="initTracker()">📹 Tracker</button>
+        <button onclick="showViewerInput()">🥽 Viewer</button>
     </div>
 
-    <script>
-        let localStream = null;
+    <!-- TRACKER SCREEN -->
+    <div id="screen-tracker" class="screen">
+        <h1>Tracker Active</h1>
+        <p>Share this code with the viewer:</p>
+        <div id="tracker-code" class="code-display">...</div>
+        <div id="tracker-status" class="status">Initializing secure link...</div>
+        <video id="local-video" autoplay muted playsinline style="display:none;"></video>
+        <br><br>
+        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Exit</button>
+    </div>
 
-        async function selectRole(role) {
-            document.getElementById('selectionScreen').style.display = 'none';
+    <!-- VIEWER INPUT SCREEN -->
+    <div id="screen-viewer-input" class="screen">
+        <h1>Enter Feed Code</h1>
+        <input type="text" id="room-code" placeholder="XXXXXX" maxlength="6">
+        <br>
+        <button onclick="joinFeed()">Join Feed</button>
+        <div id="viewer-error" class="error"></div>
+        <br><br>
+        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Back</button>
+    </div>
+
+    <!-- VIEWER VR SCREEN -->
+    <div id="screen-viewer-vr" class="screen">
+        <h1>VR Live Feed</h1>
+        <div class="vr-container">
+            <div class="vr-eye"><video id="vr-left" autoplay playsinline></video></div>
+            <div class="vr-eye"><video id="vr-right" autoplay playsinline></video></div>
+            <div class="vr-overlay">
+                <div class="live-badge">LIVE</div>
+                <div class="vr-crosshair"></div>
+            </div>
+        </div>
+        <div id="viewer-status" class="status">Connecting to tracker stream...</div>
+        <br>
+        <button onclick="resetApp()" style="font-size: 0.9rem; padding: 10px 20px;">Disconnect</button>
+    </div>
+
+<script>
+    // --- CONFIGURATION ---
+    // Using public PeerJS cloud server for signaling (free tier)
+    const PEER_CONFIG = { debug: 2 }; 
+    
+    let peer = null;
+    let localStream = null;
+    let currentCall = null;
+
+    // --- NAVIGATION ---
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function resetApp() {
+        if (peer) { peer.destroy(); peer = null; }
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        if (currentCall) { currentCall.close(); currentCall = null; }
+        
+        // Clear videos
+        ['local-video', 'vr-left', 'vr-right'].forEach(id => {
+            const v = document.getElementById(id);
+            v.srcObject = null;
+        });
+        
+        document.getElementById('room-code').value = '';
+        document.getElementById('viewer-error').textContent = '';
+        showScreen('screen-select');
+    }
+
+    // --- TRACKER LOGIC ---
+    async function initTracker() {
+        showScreen('screen-tracker');
+        const statusEl = document.getElementById('tracker-status');
+        const codeEl = document.getElementById('tracker-code');
+        
+        try {
+            // 1. Get Camera
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} }, 
+                audio: false 
+            });
             
-            if (role === 'tracker') {
-                document.getElementById('trackerScreen').style.display = 'block';
-                await startTracker();
-            } else if (role === 'viewer') {
-                document.getElementById('viewerScreen').style.display = 'block';
-                await startViewer();
-            }
-        }
+            // Show preview locally (optional, hidden by default but good for debugging)
+            // document.getElementById('local-video').srcObject = localStream; 
 
-        async function startTracker() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        facingMode: 'environment'
-                    }, 
-                    audio: false 
+            // 2. Generate Short ID
+            const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            codeEl.textContent = shortId;
+            
+            // 3. Initialize Peer
+            peer = new Peer(shortId, PEER_CONFIG);
+            
+            peer.on('open', (id) => {
+                statusEl.textContent = `✅ Online. Waiting for viewer to join ${id}...`;
+            });
+            
+            peer.on('call', (call) => {
+                statusEl.textContent = "📡 Viewer connected! Sending stream...";
+                call.answer(localStream); // Answer with our camera stream
+                currentCall = call;
+                
+                call.on('close', () => {
+                    statusEl.textContent = "❌ Viewer disconnected.";
+                    currentCall = null;
+                });
+            });
+            
+            peer.on('error', (err) => {
+                console.error(err);
+                if(err.type === 'unavailable-id') {
+                    statusEl.textContent = "⚠️ Code taken. Refreshing...";
+                    setTimeout(initTracker, 1000); // Retry with new code
+                } else {
+                    statusEl.textContent = "Error: " + err.type;
+                }
+            });
+            
+        } catch (err) {
+            statusEl.textContent = "❌ Camera Error: " + err.message;
+            statusEl.style.color = "#ff4444";
+        }
+    }
+
+    // --- VIEWER LOGIC ---
+    function showViewerInput() {
+        showScreen('screen-viewer-input');
+    }
+
+    async function joinFeed() {
+        const code = document.getElementById('room-code').value.trim().toUpperCase();
+        const errorEl = document.getElementById('viewer-error');
+        const statusEl = document.getElementById('viewer-status');
+        
+        if (code.length < 4) {
+            errorEl.textContent = "Please enter a valid code";
+            return;
+        }
+        
+        errorEl.textContent = "";
+        showScreen('screen-viewer-vr');
+        statusEl.textContent = `🔗 Connecting to ${code}...`;
+        
+        try {
+            peer = new Peer(null, PEER_CONFIG); // Let server assign us a random ID
+            
+            peer.on('open', () => {
+                // Call the tracker
+                const call = peer.call(code, localStream); // localStream is null here, which is fine for receive-only
+                currentCall = call;
+                
+                call.on('stream', (remoteStream) => {
+                    statusEl.textContent = "✅ Connected to Tracker";
+                    // Mirror stream to both eyes for VR
+                    document.getElementById('vr-left').srcObject = remoteStream;
+                    document.getElementById('vr-right').srcObject = remoteStream;
                 });
                 
-                localStream = stream;
-                const videoElement = document.getElementById('trackerVideo');
-                videoElement.srcObject = stream;
-                
-                // In a real implementation, you would broadcast this stream
-                // using WebRTC or WebSocket to viewers
-                console.log('Tracker camera started');
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                alert('Could not access camera. Please allow camera permissions.');
-            }
-        }
-
-        async function startViewer() {
-            try {
-                // In a real implementation, you would receive the stream from the tracker
-                // For demo purposes, we'll use the local camera to simulate receiving a feed
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }, 
-                    audio: false 
+                call.on('error', (err) => {
+                    statusEl.textContent = "❌ Connection failed: " + err.type;
                 });
                 
-                const leftVideo = document.getElementById('viewerVideoLeft');
-                const rightVideo = document.getElementById('viewerVideoRight');
-                
-                leftVideo.srcObject = stream;
-                rightVideo.srcObject = stream.clone();
-                
-                console.log('Viewer mode started - VR display active');
-            } catch (error) {
-                console.error('Error starting viewer:', error);
-                alert('Could not start viewer. Please allow camera permissions.');
-            }
-        }
-
-        function goBack() {
-            // Stop all video streams
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-            }
+                call.on('close', () => {
+                    statusEl.textContent = "❌ Tracker disconnected";
+                });
+            });
             
-            // Stop viewer videos
-            const leftVideo = document.getElementById('viewerVideoLeft');
-            const rightVideo = document.getElementById('viewerVideoRight');
-            if (leftVideo.srcObject) {
-                leftVideo.srcObject.getTracks().forEach(track => track.stop());
-                leftVideo.srcObject = null;
-            }
-            if (rightVideo.srcObject) {
-                rightVideo.srcObject.getTracks().forEach(track => track.stop());
-                rightVideo.srcObject = null;
-            }
+            peer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    statusEl.textContent = "❌ Tracker not found. Check code.";
+                } else {
+                    statusEl.textContent = "❌ Network Error: " + err.type;
+                }
+            });
             
-            // Hide all screens and show selection
-            document.getElementById('trackerScreen').style.display = 'none';
-            document.getElementById('viewerScreen').style.display = 'none';
-            document.getElementById('selectionScreen').style.display = 'flex';
+        } catch (err) {
+            statusEl.textContent = "❌ Init Error: " + err.message;
         }
-    </script>
+    }
+</script>
 </body>
 </html>
